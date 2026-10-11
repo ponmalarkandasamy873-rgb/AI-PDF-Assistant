@@ -3,6 +3,8 @@ import sqlite3
 import hashlib
 import requests
 from pypdf import PdfReader
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 st.set_page_config(page_title="AI PDF Assistant", page_icon="📚")
 DB = "users.db"
@@ -45,6 +47,85 @@ def ask_ai(prompt):
 def extract_pdf(file):
     reader = PdfReader(file)
     return "\n".join(page.extract_text() or "" for page in reader.pages)
+    def extract_pdf_pages(file):
+    reader = PdfReader(file)
+    pages = []
+
+    for page_number, page in enumerate(reader.pages, start=1):
+        text = page.extract_text() or ""
+        if text.strip():
+            pages.append({
+                "page": page_number,
+                "text": text
+            })
+
+    return pages
+
+
+def chunk_pdf_pages(pages, chunk_size=1000, overlap=150):
+    chunks = []
+
+    for page in pages:
+        text = page["text"]
+        start = 0
+
+        while start < len(text):
+            end = start + chunk_size
+            chunk_text = text[start:end]
+
+            if chunk_text.strip():
+                chunks.append({
+                    "page": page["page"],
+                    "text": chunk_text
+                })
+
+            if end >= len(text):
+                break
+
+            start = end - overlap
+
+    return chunks
+
+
+def retrieve_relevant_chunks(question, chunks, top_k=3):
+    if not chunks or not question.strip():
+        return []
+
+    documents = [chunk["text"] for chunk in chunks]
+
+    try:
+        vectorizer = TfidfVectorizer(
+            stop_words="english",
+            max_features=10000
+        )
+
+        matrix = vectorizer.fit_transform(
+            documents + [question]
+        )
+
+        scores = cosine_similarity(
+            matrix[-1],
+            matrix[:-1]
+        ).flatten()
+
+        ranked_indices = scores.argsort()[::-1]
+        results = []
+
+        for index in ranked_indices:
+            if scores[index] <= 0:
+                continue
+
+            result = dict(chunks[index])
+            result["score"] = float(scores[index])
+            results.append(result)
+
+            if len(results) >= top_k:
+                break
+
+        return results
+
+    except ValueError:
+        return []
 
 setup_db()
 st.title("📚 AI PDF Assistant")
