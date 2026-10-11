@@ -2,3 +2,6 @@ streamlit
 requests
 pypdf
 streamlit-authenticator
+sentence-transformers
+numpy
+scikit-learn
