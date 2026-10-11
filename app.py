@@ -3,12 +3,9 @@ import sqlite3
 import hashlib
 import requests
 from pypdf import PdfReader
-from io import BytesIO
 
 st.set_page_config(page_title="AI PDF Assistant", page_icon="📚")
 DB = "users.db"
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "llama3.2:1b"
 
 def setup_db():
     with sqlite3.connect(DB) as conn:
@@ -23,13 +20,27 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def ask_ai(prompt):
+    api_key = st.secrets["GEMINI_API_KEY"]
+    url = (
+        "https://generativelanguage.googleapis.com/"
+        "v1beta/models/gemini-2.5-flash:generateContent"
+    )
     response = requests.post(
-        OLLAMA_URL,
-        json={"model": MODEL, "prompt": prompt, "stream": False},
-        timeout=300
+        url,
+        headers={
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json"
+        },
+        json={
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }]
+        },
+        timeout=120
     )
     response.raise_for_status()
-    return response.json()["response"]
+    data = response.json()
+    return data["candidates"][0]["content"]["parts"][0]["text"]
 
 def extract_pdf(file):
     reader = PdfReader(file)
@@ -49,14 +60,12 @@ if not st.session_state.logged_in:
     with login_tab:
         username = st.text_input("Username", key="login_user")
         password = st.text_input("Password", type="password", key="login_pass")
-
         if st.button("Login"):
             with sqlite3.connect(DB) as conn:
                 row = conn.execute(
                     "SELECT password_hash FROM users WHERE username=?",
                     (username.strip(),)
                 ).fetchone()
-
             if row and row[0] == hash_password(password):
                 st.session_state.logged_in = True
                 st.session_state.username = username.strip()
@@ -67,7 +76,6 @@ if not st.session_state.logged_in:
     with register_tab:
         new_user = st.text_input("Create username", key="new_user")
         new_pass = st.text_input("Create password", type="password", key="new_pass")
-
         if st.button("Register"):
             if not new_user.strip() or len(new_pass) < 8:
                 st.error("Enter a username and a password with at least 8 characters.")
@@ -84,6 +92,7 @@ if not st.session_state.logged_in:
 
 else:
     st.success(f"Welcome, {st.session_state.username}!")
+
     if st.button("Logout"):
         st.session_state.logged_in = False
         st.session_state.chat_history = []
@@ -110,15 +119,14 @@ else:
                             "Summarize this PDF clearly using headings and bullet points:\n"
                             + pdf_text[:12000]
                         )
-                    except requests.RequestException as e:
-                        st.error(f"Could not connect to Ollama: {e}")
+                    except Exception as e:
+                        st.error(f"AI error: {e}")
 
             if "summary" in st.session_state:
                 st.subheader("PDF Summary")
                 st.write(st.session_state.summary)
                 st.download_button(
-                    "Download Summary",
-                    st.session_state.summary,
+                    "Download Summary", st.session_state.summary,
                     file_name="pdf_summary.txt"
                 )
 
@@ -130,20 +138,20 @@ else:
                             "Give four options and mark the correct answer:\n"
                             + pdf_text[:12000]
                         )
-                    except requests.RequestException as e:
-                        st.error(f"Could not connect to Ollama: {e}")
+                    except Exception as e:
+                        st.error(f"AI error: {e}")
 
             if "quiz" in st.session_state:
                 st.subheader("AI Quiz")
                 st.write(st.session_state.quiz)
                 st.download_button(
-                    "Download Quiz",
-                    st.session_state.quiz,
+                    "Download Quiz", st.session_state.quiz,
                     file_name="pdf_quiz.txt"
                 )
 
             st.subheader("Ask Questions from PDF")
             question = st.text_input("Type your question")
+
             if st.button("Ask AI"):
                 if question.strip():
                     with st.spinner("Finding an answer..."):
@@ -151,13 +159,12 @@ else:
                             answer = ask_ai(
                                 "Answer using only the PDF content below. "
                                 "If the answer is not present, say so.\n\n"
-                                f"PDF:\n{pdf_text[:12000]}\n\nQuestion: {question}"
+                                f"PDF:\n{pdf_text[:12000]}\n\n"
+                                f"Question: {question}"
                             )
-                            st.session_state.chat_history.append(
-                                (question, answer)
-                            )
-                        except requests.RequestException as e:
-                            st.error(f"Could not connect to Ollama: {e}")
+                            st.session_state.chat_history.append((question, answer))
+                        except Exception as e:
+                            st.error(f"AI error: {e}")
 
             if st.session_state.chat_history:
                 st.subheader("Chat History")
