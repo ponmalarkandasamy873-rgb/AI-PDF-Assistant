@@ -234,19 +234,43 @@ else:
             question = st.text_input("Type your question")
 
             if st.button("Ask AI"):
-                if question.strip():
-                    with st.spinner("Finding an answer..."):
-                        try:
-                            answer = ask_ai(
-                                "Answer using only the PDF content below. "
-                                "If the answer is not present, say so.\n\n"
-                                f"PDF:\n{pdf_text[:12000]}\n\n"
-                                f"Question: {question}"
-                            )
-                            st.session_state.chat_history.append((question, answer))
-                        except Exception as e:
-                            st.error(f"AI error: {e}")
+    if question.strip():
+        with st.spinner("Searching the PDF..."):
+            try:
+                pages = extract_pdf_pages(uploaded_pdf)
+                chunks = chunk_pdf_pages(pages)
+                relevant_chunks = retrieve_relevant_chunks(question, chunks)
 
+                if not relevant_chunks:
+                    st.warning(
+                        "Relevant information was not found in the PDF."
+                    )
+                else:
+                    context = "\n\n".join(
+                        f"PDF Page {chunk['page']}:\n{chunk['text']}"
+                        for chunk in relevant_chunks
+                    )
+
+                    answer = ask_ai(
+                        "Answer the question using only the PDF excerpts below. "
+                        "If the answer is not present, say so. "
+                        "Mention the PDF page number supporting your answer.\n\n"
+                        f"PDF excerpts:\n{context}\n\n"
+                        f"Question: {question}"
+                    )
+
+                    page_numbers = sorted({
+                        chunk["page"] for chunk in relevant_chunks
+                    })
+                    answer += (
+                        "\n\n**Relevant PDF pages:** "
+                        + ", ".join(map(str, page_numbers))
+                    )
+
+                    st.session_state.chat_history.append((question, answer))
+
+            except Exception as e:
+                st.error(f"AI error: {e}")
             if st.session_state.chat_history:
                 st.subheader("Chat History")
                 for q, a in reversed(st.session_state.chat_history):
