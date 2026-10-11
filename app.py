@@ -23,7 +23,7 @@ def ask_ai(prompt):
     api_key = st.secrets["GEMINI_API_KEY"]
     url = (
         "https://generativelanguage.googleapis.com/"
-        "v1beta/models/gemini-2.5-flash:generateContent"
+        "v1beta/models/gemini-3.5-flash-lite:generateContent"
     )
     response = requests.post(
         url,
