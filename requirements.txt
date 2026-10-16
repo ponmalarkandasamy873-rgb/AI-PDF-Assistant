@@ -5,3 +5,4 @@ streamlit-authenticator
 numpy
 scikit-learn
 python-dotenv
+google-genai
