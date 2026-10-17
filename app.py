@@ -1,6 +1,6 @@
 import streamlit as st
 st.set_page_config(
-    page_title="AIza - AI PDF Assistant",
+    page_title="AIza | Smart PDF Assistant",
     page_icon="📚",
     layout="wide"
 )
